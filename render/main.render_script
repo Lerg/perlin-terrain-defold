@@ -1,0 +1,26 @@
+function init(self)
+	self.tile_pred = render.predicate{'tile'}
+	self.view = vmath.matrix4()
+	self.clear_bits = {[render.BUFFER_COLOR_BIT] = vmath.vector4(0, 0, 0, 1), [render.BUFFER_DEPTH_BIT] = 1, [render.BUFFER_STENCIL_BIT] = 0}
+	self.identity_matrix = vmath.matrix4()
+end
+
+function update(self, dt)
+	render.set_depth_mask(true)
+	render.set_stencil_mask(0xff)
+	render.clear(self.clear_bits)
+
+	local width, height = render.get_window_width(), render.get_window_height()
+
+	render.set_viewport(0, 0, width, height)
+	render.set_view(self.view)
+
+	render.disable_state(render.STATE_CULL_FACE)
+	render.enable_state(render.STATE_STENCIL_TEST)
+	render.disable_state(render.STATE_DEPTH_TEST)
+	render.enable_state(render.STATE_BLEND)
+	render.set_blend_func(render.BLEND_SRC_ALPHA, render.BLEND_ONE_MINUS_SRC_ALPHA)
+	local proj_width, proj_height = width / 2, height / 2
+	render.set_projection(vmath.matrix4_orthographic(-proj_width, proj_width, -proj_height, proj_height, 1, -1))
+	render.draw(self.tile_pred)
+end

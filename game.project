@@ -1,0 +1,20 @@
+[bootstrap]
+main_collection = /main/main.collectionc
+render = /render/main.renderc
+
+[script]
+shared_state = 1
+
+[display]
+width = 1024
+height = 1024
+
+[android]
+input_method = HiddenInputField
+
+[project]
+title = Perlin Terrain
+
+[sprite]
+max_count = 1024
+
