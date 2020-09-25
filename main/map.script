@@ -7,7 +7,15 @@ local colors = {
 	water = 255 * vmath.vector3(0.2, 0.5, 1),
 	sand = 255 * vmath.vector3(0.8, 0.9, 0.6),
 	grass = 255 * vmath.vector3(0.2, 0.8, 0.4),
-	rock = 255 * vmath.vector3(0.7, 0.7, 0.7)
+	rock = 255 * vmath.vector3(0.7, 0.7, 0.7),
+	snow = 255 * vmath.vector3(1, 1, 1)
+}
+
+local levels = {
+	{elevation = 0.4, name = 'water'},
+	{elevation = 0.6, name = 'sand'},
+	{elevation = 0.7, name = 'grass'},
+	{elevation = 1, name = 'rock'}
 }
 
 local function set_pixel(stream, width, x, y, color)
@@ -21,21 +29,30 @@ function generate_terrain(self)
 	self.buffer = buffer.create(self.width * self.height, {{name = rgb, type = buffer.VALUE_TYPE_UINT8, count = 3}})
 	local stream = buffer.get_stream(self.buffer, rgb)
 
-	local scale = 1 / 50
+	local scale = 1 / 100
 	for x = 0, self.width - 1 do
 		for y = 0, self.height - 1 do
-			local v = 0.5 + perlin:noise(x * scale, y * scale, 0) / 2
-			local color = colors.rock
-			if v < 0.55 then
-				color = colors.water
-			elseif v < 0.7 then
-				color = colors.sand
-			elseif v < 0.8 then
-				color = colors.grass
+			local elevation = 0.5 + (perlin:noise(x * scale, y * scale, self.noise_z) + 0.5 * perlin:noise(2 * x * scale, 2 * y * scale, self.noise_z) + 0.25 * perlin:noise(4 * x * scale, 4 * y * scale, self.noise_z)) / 2
+			elevation = math.pow(elevation, 1.5)
+			local level
+			for i = 1, #levels do
+				if elevation < levels[i].elevation then
+					level = levels[i]
+					break
+				end
+			end
+			local coldness = 2 * math.abs(y / self.height - 0.5) + 0.5 * elevation
+			local color
+			if coldness > 0.8 and level.name ~= 'water' then
+				color = colors.snow
+			else
+				color = colors[level.name]
 			end
 			set_pixel(stream, self.width, x, y, color)
 		end
 	end
+
+	self.noise_z = self.noise_z + 0.01
 
 	local resource_path = go.get(self.model, 'texture0')
 	local header = {width = self.width, height = self.height, type = resource.TEXTURE_TYPE_2D, format = resource.TEXTURE_FORMAT_RGB, num_mip_maps = 1}
@@ -46,7 +63,21 @@ function init(self)
 	self.width = 1024
 	self.height = 1024
 	go.set_scale(vmath.vector3(self.width, self.height, 1))
-	self.model = msg.url('#model')	
+	self.model = msg.url('#model')
 
+	self.noise_z = 0
 	generate_terrain(self)
+
+	self.regeneration_period = .1
+	self.regeneration_time = 0
 end
+
+--[[function update(self, dt)
+	if self.regeneration_time > self.regeneration_period then
+		generate_terrain(self)
+		print(self.regeneration_time)
+		self.regeneration_time = 0
+	else
+		self.regeneration_time = self.regeneration_time + dt
+	end
+end]]
