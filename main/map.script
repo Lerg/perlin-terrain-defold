@@ -2,6 +2,7 @@ local perlin = require('main.perlin_noise')
 perlin:load()
 
 local rgb = hash('rgb')
+local luminance = hash('luminance')
 
 local colors = {
 	water = 255 * vmath.vector3(0.2, 0.5, 1),
@@ -18,6 +19,10 @@ local levels = {
 	{elevation = 1, name = 'rock'}
 }
 
+local function colortobyte(color)
+	return 255 * color
+end
+
 local function set_pixel(stream, width, x, y, color)
 	local index = 3 * (x + y * width) + 1
 	stream[index] = color.x
@@ -25,38 +30,74 @@ local function set_pixel(stream, width, x, y, color)
 	stream[index + 2] = color.z
 end
 
-function generate_terrain(self)
-	self.buffer = buffer.create(self.width * self.height, {{name = rgb, type = buffer.VALUE_TYPE_UINT8, count = 3}})
-	local stream = buffer.get_stream(self.buffer, rgb)
+local function set_luminance(stream, width, x, y, luminance)
+	stream[(x + y * width) + 1] = 255 * luminance
+end
 
+local function generate_heightmap(self)
+	self.heightmap = {}
 	local scale = 1 / 100
 	for x = 0, self.width - 1 do
 		for y = 0, self.height - 1 do
 			local elevation = 0.5 + (perlin:noise(x * scale, y * scale, self.noise_z) + 0.5 * perlin:noise(2 * x * scale, 2 * y * scale, self.noise_z) + 0.25 * perlin:noise(4 * x * scale, 4 * y * scale, self.noise_z)) / 2
-			elevation = math.pow(elevation, 1.5)
-			local level
-			for i = 1, #levels do
-				if elevation < levels[i].elevation then
-					level = levels[i]
-					break
-				end
-			end
-			local coldness = 2 * math.abs(y / self.height - 0.5) + 0.5 * elevation
-			local color
-			if coldness > 0.8 and level.name ~= 'water' then
-				color = colors.snow
-			else
-				color = colors[level.name]
-			end
-			set_pixel(stream, self.width, x, y, color)
+			self.heightmap[x + y * self.width] = math.pow(elevation, 1.5)
 		end
 	end
+end
 
-	self.noise_z = self.noise_z + 0.01
+local function get_value(map, width, height, x, y)
+	if x < 0 then
+		x = 0
+	elseif x >= width then
+		x = width - 1
+	end
+	if y < 0 then
+		y = 0
+	elseif y >= height then
+		y = height - 1
+	end
+	return map[x + y * width]
+end
 
+local normal_scale = 100
+local function get_normal(self, x, y)
+	local h1 = get_value(self.heightmap, self.width, self.height, x + 1, y)
+	local h2 = get_value(self.heightmap, self.width, self.height, x - 1, y)
+	local v1 = get_value(self.heightmap, self.width, self.height, x, y + 1)
+	local v2 = get_value(self.heightmap, self.width, self.height, x, y - 1)
+	local dxy = vmath.vector3(normal_scale * (h1 - h2), normal_scale * (v1 - v2), 1)
+	return 0.5 * vmath.normalize(dxy) + vmath.vector3(0.5, 0.5, 0.5)
+end
+
+local function set_textures(self)
+	local heightmap_buffer = buffer.create(self.width * self.height, {{name = luminance, type = buffer.VALUE_TYPE_UINT8, count = 1}})
+	local heightmap_stream = buffer.get_stream(heightmap_buffer, luminance)
+
+	local normalmap_buffer = buffer.create(self.width * self.height, {{name = rgb, type = buffer.VALUE_TYPE_UINT8, count = 3}})
+	local normalmap_stream = buffer.get_stream(normalmap_buffer, rgb)
+
+	for x = 0, self.width - 1 do
+		for y = 0, self.height - 1 do
+			local elevation = self.heightmap[x + y * self.width]
+			set_luminance(heightmap_stream, self.width, x, y, elevation)
+			set_pixel(normalmap_stream, self.width, x, y, colortobyte(get_normal(self, x, y)))
+		end
+	end
+	
 	local resource_path = go.get(self.model, 'texture0')
+	local header = {width = self.width, height = self.height, type = resource.TEXTURE_TYPE_2D, format = resource.TEXTURE_FORMAT_LUMINANCE, num_mip_maps = 1}
+	resource.set_texture(resource_path, header, heightmap_buffer)
+
+	local resource_path = go.get(self.model, 'texture1')
 	local header = {width = self.width, height = self.height, type = resource.TEXTURE_TYPE_2D, format = resource.TEXTURE_FORMAT_RGB, num_mip_maps = 1}
-	resource.set_texture(resource_path, header, self.buffer)
+	resource.set_texture(resource_path, header, normalmap_buffer)
+end
+
+local function set_elevations(self)
+	go.set(self.model, 'elevation_water', vmath.vector4(0, 0, 0, 0))
+	go.set(self.model, 'elevation_sand', vmath.vector4(0.6, 0, 0, 0))
+	go.set(self.model, 'elevation_grass', vmath.vector4(0.7, 0, 0, 0))
+	go.set(self.model, 'elevation_rock', vmath.vector4(1, 0, 0, 0))
 end
 
 function init(self)
@@ -66,18 +107,8 @@ function init(self)
 	self.model = msg.url('#model')
 
 	self.noise_z = 0
-	generate_terrain(self)
-
-	self.regeneration_period = .1
-	self.regeneration_time = 0
+	generate_heightmap(self)
+	set_textures(self)
+	set_elevations(self)
+	go.animate(self.model, 'elevation_water', go.PLAYBACK_LOOP_PINGPONG, vmath.vector4(1, 0, 0, 0), go.EASING_OUTQUAD, 10)
 end
-
---[[function update(self, dt)
-	if self.regeneration_time > self.regeneration_period then
-		generate_terrain(self)
-		print(self.regeneration_time)
-		self.regeneration_time = 0
-	else
-		self.regeneration_time = self.regeneration_time + dt
-	end
-end]]

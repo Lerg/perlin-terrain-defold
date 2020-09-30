@@ -23,6 +23,7 @@ embedded_instances {
   "  data: \"mesh: \\\"/models/quad.dae\\\"\\n"
   "material: \\\"/render/rect.material\\\"\\n"
   "textures: \\\"/models/1.png\\\"\\n"
+  "textures: \\\"/models/2.png\\\"\\n"
   "skeleton: \\\"\\\"\\n"
   "animations: \\\"\\\"\\n"
   "default_animation: \\\"\\\"\\n"
