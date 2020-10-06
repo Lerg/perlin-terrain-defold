@@ -93,11 +93,47 @@ local function set_textures(self)
 	resource.set_texture(resource_path, header, normalmap_buffer)
 end
 
-local function set_elevations(self)
-	go.set(self.model, 'elevation_water', vmath.vector4(0, 0, 0, 0))
-	go.set(self.model, 'elevation_sand', vmath.vector4(0.6, 0, 0, 0))
-	go.set(self.model, 'elevation_grass', vmath.vector4(0.7, 0, 0, 0))
+local function set_climate_parameters(self)
+	go.set(self.model, 'color_water', vmath.vector4(0.2, 0.5, 1, 1))
+	go.set(self.model, 'color_sand', vmath.vector4(0.8, 0.9, 0.6, 1))
+	go.set(self.model, 'color_grass', vmath.vector4(0.2, 0.8, 0.4, 1))
+	go.set(self.model, 'color_rock', vmath.vector4(0.7, 0.4, 0.2, 1))
+
+	go.set(self.model, 'base_coldness', vmath.vector4(-1, 0, 0, 0))
+end
+
+local function animate_climate(self)
+	go.set(self.model, 'elevation_water', vmath.vector4(1, 0, 0, 0))
+	go.set(self.model, 'elevation_sand', vmath.vector4(0, 0, 0, 0))
+	go.set(self.model, 'elevation_grass', vmath.vector4(0, 0, 0, 0))
 	go.set(self.model, 'elevation_rock', vmath.vector4(1, 0, 0, 0))
+
+	go.animate(self.model, 'elevation_water.x', go.PLAYBACK_ONCE_FORWARD, 0.4, go.EASING_OUTQUAD, 10)
+	go.animate(self.model, 'color_rock', go.PLAYBACK_ONCE_FORWARD, vmath.vector4(0.7, 0.7, 0.7, 0), go.EASING_OUTQUAD, 5, 5, function()
+		go.animate(self.model, 'elevation_grass.x', go.PLAYBACK_ONCE_FORWARD, 0.6, go.EASING_OUTQUAD, 5)
+		go.animate(self.model, 'elevation_sand.x', go.PLAYBACK_ONCE_FORWARD, 0.45, go.EASING_OUTQUAD, 4, 1, function()
+			go.animate(self.model, 'elevation_water.x', go.PLAYBACK_ONCE_FORWARD, 0.3, go.EASING_LINEAR, 10)
+			go.animate(self.model, 'base_coldness.x', go.PLAYBACK_ONCE_FORWARD, 1, go.EASING_LINEAR, 10, 0, function()
+				go.set(self.model, 'elevation_sand.x', 0)
+				go.set(self.model, 'elevation_grass.x', 0.65)
+				go.animate(self.model, 'base_coldness.x', go.PLAYBACK_ONCE_FORWARD, -1, go.EASING_LINEAR, 10)
+				go.animate(self.model, 'elevation_grass.x', go.PLAYBACK_ONCE_FORWARD, 0.3, go.EASING_OUTQUAD, 10, 5)
+				go.animate(self.model, 'elevation_water.x', go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_LINEAR, 10, 5, function()
+					go.animate(self.model, 'elevation_sand.x', go.PLAYBACK_ONCE_FORWARD, 0.3, go.EASING_OUTQUAD, 8)
+					go.animate(self.model, 'color_sand', go.PLAYBACK_ONCE_FORWARD, vmath.vector4(0.9, 0.8, 0.5, 0), go.EASING_OUTQUAD, 5, 3)
+					go.animate(self.model, 'color_rock', go.PLAYBACK_ONCE_FORWARD, vmath.vector4(0.7, 0.5, 0.3, 0), go.EASING_OUTQUAD, 5, 3)
+				end)
+			end)
+		end)
+	end)
+end
+
+function update(self, dt)
+	self.light_angle = self.light_angle + 0.005
+	if self.light_angle > 2 * math.pi then
+		self.light_angle = 0
+	end
+	go.set(self.model, 'light_position', vmath.vector4(math.cos(self.light_angle), math.sin(self.light_angle), math.sin(self.light_angle) + 0.5, 0))
 end
 
 function init(self)
@@ -106,9 +142,12 @@ function init(self)
 	go.set_scale(vmath.vector3(self.width, self.height, 1))
 	self.model = msg.url('#model')
 
+	self.light_angle = 0
+
 	self.noise_z = 0
 	generate_heightmap(self)
 	set_textures(self)
-	set_elevations(self)
-	go.animate(self.model, 'elevation_water', go.PLAYBACK_LOOP_PINGPONG, vmath.vector4(1, 0, 0, 0), go.EASING_OUTQUAD, 10)
+	set_climate_parameters(self)
+
+	animate_climate(self)
 end
